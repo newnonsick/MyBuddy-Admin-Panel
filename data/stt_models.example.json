@@ -1,0 +1,94 @@
+[
+  {
+    "id": "whisper-tiny",
+    "fileName": "ggml-tiny.bin",
+    "downloadUrl": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin?download=true",
+    "approximateSize": "0.08 GB",
+    "expectedMinBytes": 60000000,
+    "modelType": "whisper",
+    "config": {
+      "variant": "tiny",
+      "quantization": null,
+      "coreML": {
+        "downloadUrl": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-encoder.mlmodelc.zip?download=true",
+        "archiveFileName": "ggml-tiny-encoder.mlmodelc.zip",
+        "extractedFolderName": "ggml-tiny-encoder.mlmodelc",
+        "approximateSize": "0.02 GB",
+        "expectedMinBytes": 10000000
+      }
+    },
+    "display": {
+      "name": "Whisper Tiny",
+      "description": "A balance between speed and accuracy, ideal for general use."
+    }
+  },
+  {
+    "id": "whisper-tiny-q8_0",
+    "fileName": "ggml-tiny-q8_0.bin",
+    "downloadUrl": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q8_0.bin?download=true",
+    "approximateSize": "0.05 GB",
+    "expectedMinBytes": 30000000,
+    "modelType": "whisper",
+    "config": {
+      "variant": "tiny",
+      "quantization": "q8_0",
+      "coreML": {
+        "downloadUrl": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-encoder.mlmodelc.zip?download=true",
+        "archiveFileName": "ggml-tiny-encoder.mlmodelc.zip",
+        "extractedFolderName": "ggml-tiny-encoder.mlmodelc",
+        "approximateSize": "0.02 GB",
+        "expectedMinBytes": 10000000
+      }
+    },
+    "display": {
+      "name": "Whisper Tiny Q8_0",
+      "description": "A balance between speed and accuracy, ideal for general use."
+    }
+  },
+  {
+    "id": "whisper-base-q5_1",
+    "fileName": "ggml-base-q5_1.bin",
+    "downloadUrl": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_1.bin?download=true",
+    "approximateSize": "0.06 GB",
+    "expectedMinBytes": 50000000,
+    "modelType": "whisper",
+    "config": {
+      "variant": "base",
+      "quantization": "q5_1",
+      "coreML": {
+        "downloadUrl": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-encoder.mlmodelc.zip?download=true",
+        "archiveFileName": "ggml-base-encoder.mlmodelc.zip",
+        "extractedFolderName": "ggml-base-encoder.mlmodelc",
+        "approximateSize": "0.04 GB",
+        "expectedMinBytes": 30000000
+      }
+    },
+    "display": {
+      "name": "Whisper Base Q5_1",
+      "description": "A balance between speed and accuracy, ideal for general use."
+    }
+  },
+  {
+    "id": "whisper-small-q5_1",
+    "fileName": "ggml-small-q5_1.bin",
+    "downloadUrl": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin?download=true",
+    "approximateSize": "0.2 GB",
+    "expectedMinBytes": 150000000,
+    "modelType": "whisper",
+    "config": {
+      "variant": "small",
+      "quantization": "q5_1",
+      "coreML": {
+        "downloadUrl": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-encoder.mlmodelc.zip?download=true",
+        "archiveFileName": "ggml-small-encoder.mlmodelc.zip",
+        "extractedFolderName": "ggml-small-encoder.mlmodelc",
+        "approximateSize": "0.2 GB",
+        "expectedMinBytes": 100000000
+      }
+    },
+    "display": {
+      "name": "Whisper Small Q5_1",
+      "description": "A balance between speed and accuracy, ideal for general use."
+    }
+  }
+]
