@@ -74,7 +74,7 @@ The Flutter app fetches `GET /api/llm_models` and `GET /api/stt_models` from thi
 | Styling | Tailwind CSS 4 |
 | Validation | Zod 4 |
 | Notifications | Sonner |
-| Storage | File-system JSON (no database) |
+| Storage | File-system JSON / Vercel Blob |
 
 ---
 
@@ -334,10 +334,12 @@ The project is a standard Next.js App Router application. Deploy to Vercel:
 
 1. Push the repository to GitHub.
 2. Import the project in Vercel.
-3. Set the `ADMIN_KEY` environment variable in Vercel project settings.
-4. Deploy.
+3. Add a **Vercel Blob** store to your project in the Vercel dashboard.
+4. Set the `ADMIN_KEY` environment variable in Vercel project settings.
+5. Ensure the `BLOB_READ_WRITE_TOKEN` environment variable is automatically populated by Vercel Blob.
+6. Deploy.
 
-The `data/` directory with JSON files persists on Vercel's file system during the function lifecycle. For durable persistence across deployments, seed the data files during build or use the admin panel to re-import after deployment.
+When deployed on Vercel (detected automatically via the `VERCEL` environment variable), the admin panel natively uses **Vercel Blob Storage** instead of the local file system. This ensures durable persistence across deployments and serverless function executions. You no longer need to manually import data after each redeployment.
 
 ### Self-Hosted
 
@@ -415,10 +417,8 @@ The app will fetch model catalogs from your admin panel instead of the default U
 
 ### Data lost after redeployment
 
-- on serverless platforms, the file system may be ephemeral
-- export your catalog as JSON before redeploying
-- re-import via the admin dashboard after deployment
-- for persistent storage, mount a volume at the `data/` directory
+- **Local / Self-Hosted**: The file system is ephemeral inside Docker containers without mounted volumes. Ensure you mount a volume at the `data/` directory.
+- **Vercel Deployments**: The app automatically uses Vercel Blob for persistent data storage if configured. Verify that a Vercel Blob store is attached to your project and the `BLOB_READ_WRITE_TOKEN` environment variable is set.
 
 ---
 

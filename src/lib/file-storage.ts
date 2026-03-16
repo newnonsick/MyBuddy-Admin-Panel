@@ -1,6 +1,7 @@
 import { readFile, writeFile, rename, unlink, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
+import { put, list } from '@vercel/blob';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 
@@ -13,7 +14,7 @@ function validateFileName(fileName: string): void {
   }
 }
 
-export async function readJsonFile<T>(fileName: string, defaultValue?: T): Promise<T> {
+async function readFs<T>(fileName: string, defaultValue?: T): Promise<T> {
   validateFileName(fileName);
   const filePath = path.join(DATA_DIR, fileName);
   try {
@@ -27,7 +28,37 @@ export async function readJsonFile<T>(fileName: string, defaultValue?: T): Promi
   }
 }
 
-export async function writeJsonFile<T>(fileName: string, data: T): Promise<void> {
+async function readBlob<T>(fileName: string, defaultValue?: T): Promise<T> {
+  validateFileName(fileName);
+  try {
+    const { blobs } = await list({ prefix: `data/${fileName}` });
+    const blob = blobs.find(b => b.pathname === `data/${fileName}`);
+    if (blob) {
+      const response = await fetch(blob.url);
+      if (response.ok) {
+        const content = await response.text();
+        return JSON.parse(content) as T;
+      }
+    }
+  } catch (error) {
+    console.error(`Error reading blob data/${fileName}:`, error);
+  }
+
+  if (defaultValue !== undefined) {
+    return defaultValue;
+  }
+  
+  throw new Error(`File not found in blob storage: ${fileName}`);
+}
+
+export async function readJsonFile<T>(fileName: string, defaultValue?: T): Promise<T> {
+  if (process.env.VERCEL) {
+    return readBlob(fileName, defaultValue);
+  }
+  return readFs(fileName, defaultValue);
+}
+
+async function writeFs<T>(fileName: string, data: T): Promise<void> {
   validateFileName(fileName);
 
   if (!existsSync(DATA_DIR)) {
@@ -47,4 +78,22 @@ export async function writeJsonFile<T>(fileName: string, data: T): Promise<void>
     try { await unlink(tempPath); } catch { /* ignore */ }
     throw error;
   }
+}
+
+async function writeBlob<T>(fileName: string, data: T): Promise<void> {
+  validateFileName(fileName);
+  const content = JSON.stringify(data, null, 2);
+  JSON.parse(content);
+  
+  await put(`data/${fileName}`, content, {
+    access: 'public',
+    addRandomSuffix: false,
+  });
+}
+
+export async function writeJsonFile<T>(fileName: string, data: T): Promise<void> {
+  if (process.env.VERCEL) {
+    return writeBlob(fileName, data);
+  }
+  return writeFs(fileName, data);
 }
