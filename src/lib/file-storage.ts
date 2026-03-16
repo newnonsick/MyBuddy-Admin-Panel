@@ -1,7 +1,7 @@
 import { readFile, writeFile, rename, unlink, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
-import { put, list } from '@vercel/blob';
+import { put, list, del } from '@vercel/blob';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 
@@ -47,7 +47,7 @@ async function readBlob<T>(fileName: string, defaultValue?: T): Promise<T> {
   if (defaultValue !== undefined) {
     return defaultValue;
   }
-  
+
   throw new Error(`File not found in blob storage: ${fileName}`);
 }
 
@@ -82,12 +82,14 @@ async function writeFs<T>(fileName: string, data: T): Promise<void> {
 
 async function writeBlob<T>(fileName: string, data: T): Promise<void> {
   validateFileName(fileName);
+  
   const content = JSON.stringify(data, null, 2);
   JSON.parse(content);
-  
+
   await put(`data/${fileName}`, content, {
     access: 'public',
     addRandomSuffix: false,
+    allowOverwrite: true,
   });
 }
 
