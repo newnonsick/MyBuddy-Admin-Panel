@@ -4,7 +4,7 @@ import type { SttModel } from '@/types/stt-models';
 
 export async function GET() {
   try {
-    const models = await readJsonFile<SttModel[]>('stt_models.json');
+    const models = await readJsonFile<SttModel[]>('stt_models.json', []);
     return NextResponse.json(models, {
       headers: {
         'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',

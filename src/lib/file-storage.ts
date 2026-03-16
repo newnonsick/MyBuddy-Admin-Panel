@@ -13,11 +13,18 @@ function validateFileName(fileName: string): void {
   }
 }
 
-export async function readJsonFile<T>(fileName: string): Promise<T> {
+export async function readJsonFile<T>(fileName: string, defaultValue?: T): Promise<T> {
   validateFileName(fileName);
   const filePath = path.join(DATA_DIR, fileName);
-  const content = await readFile(filePath, 'utf-8');
-  return JSON.parse(content) as T;
+  try {
+    const content = await readFile(filePath, 'utf-8');
+    return JSON.parse(content) as T;
+  } catch (error: any) {
+    if (error.code === 'ENOENT' && defaultValue !== undefined) {
+      return defaultValue;
+    }
+    throw error;
+  }
 }
 
 export async function writeJsonFile<T>(fileName: string, data: T): Promise<void> {
