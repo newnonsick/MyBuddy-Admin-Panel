@@ -51,7 +51,7 @@ async function readBlob<T>(fileName: string, defaultValue?: T): Promise<T> {
       const blob = blobs.find(b => b.pathname === `data/${fileName}`);
 
       if (blob) {
-        const response = await fetch(blob.url, {
+        const response = await fetch(`${blob.url}?t=${Date.now()}`, {
           cache: "no-store",
         });
 
