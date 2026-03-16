@@ -191,13 +191,9 @@ These endpoints are consumed by the MyBuddy Flutter app and require no authentic
 
 Returns the full array of LLM model metadata.
 
-Response headers include `Cache-Control: public, s-maxage=60, stale-while-revalidate=300`.
-
 #### `GET /api/stt_models`
 
 Returns the full array of STT model metadata.
-
-Same caching strategy as the LLM endpoint.
 
 ### Admin Endpoints
 
