@@ -333,7 +333,8 @@ The project is a standard Next.js App Router application. Deploy to Vercel:
 3. Add a **Vercel Blob** store to your project in the Vercel dashboard.
 4. Set the `ADMIN_KEY` environment variable in Vercel project settings.
 5. Ensure the `BLOB_READ_WRITE_TOKEN` environment variable is automatically populated by Vercel Blob.
-6. Deploy.
+6. *(Optional but Recommended)* Set `BLOB_BASE_URL` to the public URL of your Blob store (e.g., `https://<id>.public.blob.vercel-storage.com`) to drastically improve read speeds. Without this, the server takes an extra round trip to dynamically list the blobs and find the download URL during reads.
+7. Deploy.
 
 When deployed on Vercel (detected automatically via the `VERCEL` environment variable), the admin panel natively uses **Vercel Blob Storage** instead of the local file system. This ensures durable persistence across deployments and serverless function executions. You no longer need to manually import data after each redeployment.
 

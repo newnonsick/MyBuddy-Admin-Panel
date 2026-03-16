@@ -30,14 +30,35 @@ async function readFs<T>(fileName: string, defaultValue?: T): Promise<T> {
 
 async function readBlob<T>(fileName: string, defaultValue?: T): Promise<T> {
   validateFileName(fileName);
+
+  const baseUrl = process.env.BLOB_BASE_URL;
+
   try {
-    const { blobs } = await list({ prefix: `data/${fileName}` });
-    const blob = blobs.find(b => b.pathname === `data/${fileName}`);
-    if (blob) {
-      const response = await fetch(blob.url);
+    if (baseUrl) {
+      const url = `${baseUrl}/data/${fileName}`;
+
+      const response = await fetch(`${url}?t=${Date.now()}`, {
+        cache: "no-store",
+      });
+
       if (response.ok) {
         const content = await response.text();
         return JSON.parse(content) as T;
+      }
+    }
+    else {
+      const { blobs } = await list({ prefix: `data/${fileName}` });
+      const blob = blobs.find(b => b.pathname === `data/${fileName}`);
+
+      if (blob) {
+        const response = await fetch(blob.url, {
+          cache: "no-store",
+        });
+
+        if (response.ok) {
+          const content = await response.text();
+          return JSON.parse(content) as T;
+        }
       }
     }
   } catch (error) {
@@ -82,7 +103,7 @@ async function writeFs<T>(fileName: string, data: T): Promise<void> {
 
 async function writeBlob<T>(fileName: string, data: T): Promise<void> {
   validateFileName(fileName);
-  
+
   const content = JSON.stringify(data, null, 2);
   JSON.parse(content);
 
