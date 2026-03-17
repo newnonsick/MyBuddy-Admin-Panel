@@ -111,6 +111,7 @@ async function writeBlob<T>(fileName: string, data: T): Promise<void> {
     access: 'public',
     addRandomSuffix: false,
     allowOverwrite: true,
+    cacheControlMaxAge: 60,
   });
 }
 

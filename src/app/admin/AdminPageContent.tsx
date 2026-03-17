@@ -30,11 +30,13 @@ const LLM_COLUMNS = [
   { key: 'id', label: 'ID' },
   { key: 'fileName', label: 'File Name' },
   { key: 'approximateSize', label: 'Size' },
-  { key: 'config.type', label: 'Type', render: (v: unknown) => (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary-50 text-primary-700">
-      {String(v)}
-    </span>
-  )},
+  {
+    key: 'config.type', label: 'Type', render: (v: unknown) => (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary-50 text-primary-700">
+        {String(v)}
+      </span>
+    )
+  },
   { key: 'config.fileType', label: 'File Type' },
   { key: 'config.supportsFunctionCalls', label: 'Functions' },
 ];
@@ -98,8 +100,8 @@ export default function AdminPageContent() {
     setLoading(true);
     try {
       const [llmRes, sttRes] = await Promise.all([
-        fetch('/api/llm_models'),
-        fetch('/api/stt_models'),
+        fetch(`/api/llm_models?ts=${Date.now()}`, { cache: 'no-store' }),
+        fetch(`/api/stt_models?ts=${Date.now()}`, { cache: 'no-store' }),
       ]);
       const llm = await llmRes.json();
       const stt = await sttRes.json();
@@ -291,31 +293,27 @@ export default function AdminPageContent() {
           <div className="flex items-center gap-1 bg-surface rounded-lg border border-border p-1">
             <button
               onClick={() => setActiveTab('llm')}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 cursor-pointer ${
-                activeTab === 'llm'
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 cursor-pointer ${activeTab === 'llm'
                   ? 'bg-primary-600 text-white shadow-sm'
                   : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover'
-              }`}
+                }`}
             >
               LLM Models
-              <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${
-                activeTab === 'llm' ? 'bg-primary-500 text-white' : 'bg-surface-secondary text-text-muted'
-              }`}>
+              <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${activeTab === 'llm' ? 'bg-primary-500 text-white' : 'bg-surface-secondary text-text-muted'
+                }`}>
                 {llmData.length}
               </span>
             </button>
             <button
               onClick={() => setActiveTab('stt')}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 cursor-pointer ${
-                activeTab === 'stt'
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 cursor-pointer ${activeTab === 'stt'
                   ? 'bg-primary-600 text-white shadow-sm'
                   : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover'
-              }`}
+                }`}
             >
               STT Models
-              <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${
-                activeTab === 'stt' ? 'bg-primary-500 text-white' : 'bg-surface-secondary text-text-muted'
-              }`}>
+              <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${activeTab === 'stt' ? 'bg-primary-500 text-white' : 'bg-surface-secondary text-text-muted'
+                }`}>
                 {sttData.length}
               </span>
             </button>
@@ -371,11 +369,10 @@ export default function AdminPageContent() {
             <div className="flex items-center gap-1 bg-surface rounded-lg border border-border p-1">
               <button
                 onClick={() => setViewMode('table')}
-                className={`p-1.5 rounded-md transition-all duration-200 cursor-pointer ${
-                  viewMode === 'table'
+                className={`p-1.5 rounded-md transition-all duration-200 cursor-pointer ${viewMode === 'table'
                     ? 'bg-primary-50 text-primary-600'
                     : 'text-text-muted hover:text-text-secondary'
-                }`}
+                  }`}
                 title="Table view"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
@@ -384,11 +381,10 @@ export default function AdminPageContent() {
               </button>
               <button
                 onClick={() => setViewMode('json')}
-                className={`p-1.5 rounded-md transition-all duration-200 cursor-pointer ${
-                  viewMode === 'json'
+                className={`p-1.5 rounded-md transition-all duration-200 cursor-pointer ${viewMode === 'json'
                     ? 'bg-primary-50 text-primary-600'
                     : 'text-text-muted hover:text-text-secondary'
-                }`}
+                  }`}
                 title="JSON editor"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
