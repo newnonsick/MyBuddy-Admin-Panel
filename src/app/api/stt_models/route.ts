@@ -2,16 +2,14 @@ import { NextResponse } from 'next/server';
 import { readJsonFile } from '@/lib/file-storage';
 import type { SttModel } from '@/types/stt-models';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-export const fetchCache = 'force-no-store';
+export const revalidate = 3600;
 
 export async function GET() {
   try {
     const models = await readJsonFile<SttModel[]>('stt_models.json', []);
     return NextResponse.json(models, {
       headers: {
-        'Cache-Control': 'no-store, no-cache, max-age=0, must-revalidate',
+        'Cache-Control': 'public, max-age=0, s-maxage=3600, stale-while-revalidate=59',
         Pragma: 'no-cache',
         Expires: '0',
       },

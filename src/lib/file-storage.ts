@@ -1,18 +1,23 @@
 import { readFile, writeFile, rename, unlink, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
-import { revalidateTag, unstable_cache } from 'next/cache';
 import { Redis } from '@upstash/redis';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const REDIS_KEY_PREFIX = 'mybuddy-admin-panel';
-const REDIS_CACHE_REVALIDATE_SECONDS = 60 * 60;
+const REDIS_CACHE_TTL_MS = 60 * 60 * 1000;
 
 const ALLOWED_FILES = new Set(['llm_models.json', 'stt_models.json']);
 
 let redisReadClient: Redis | null = null;
 let redisWriteClient: Redis | null = null;
-const redisReaderCache = new Map<string, () => Promise<string | null>>();
+
+type RedisCacheEntry = {
+  value: unknown;
+  expiresAt: number;
+};
+
+const redisReadCache = new Map<string, RedisCacheEntry>();
 
 function parseRedisConnectionString(connectionString?: string | null): { url: string; token: string } | null {
   if (!connectionString) {
@@ -66,35 +71,35 @@ function getRedisKey(fileName: string): string {
   return `${REDIS_KEY_PREFIX}:${fileName}`;
 }
 
-function getRedisCacheTag(fileName: string): string {
-  return `${REDIS_KEY_PREFIX}:cache:${fileName}`;
+function getRedisCacheKey(fileName: string): string {
+  return getRedisKey(fileName);
 }
 
-function getRedisReader(fileName: string): () => Promise<string | null> {
-  const cachedReader = redisReaderCache.get(fileName);
-  if (cachedReader) {
-    return cachedReader;
+function getCachedRedisValue(fileName: string): unknown | null {
+  const cacheKey = getRedisCacheKey(fileName);
+  const entry = redisReadCache.get(cacheKey);
+
+  if (!entry) {
+    return null;
   }
 
-  const reader = unstable_cache(
-    async () => {
-      const redis = getRedisReadClient();
+  if (entry.expiresAt <= Date.now()) {
+    redisReadCache.delete(cacheKey);
+    return null;
+  }
 
-      if (!redis) {
-        throw new Error('Redis read credentials are missing');
-      }
+  return entry.value;
+}
 
-      return redis.get<string>(getRedisKey(fileName));
-    },
-    [REDIS_KEY_PREFIX, fileName],
-    {
-      revalidate: REDIS_CACHE_REVALIDATE_SECONDS,
-      tags: [getRedisCacheTag(fileName)],
-    }
-  );
+function setCachedRedisValue(fileName: string, value: unknown): void {
+  redisReadCache.set(getRedisCacheKey(fileName), {
+    value,
+    expiresAt: Date.now() + REDIS_CACHE_TTL_MS,
+  });
+}
 
-  redisReaderCache.set(fileName, reader);
-  return reader;
+function clearCachedRedisValue(fileName: string): void {
+  redisReadCache.delete(getRedisCacheKey(fileName));
 }
 
 function getRedisReadClient(): Redis | null {
@@ -169,8 +174,23 @@ async function readFs<T>(fileName: string, defaultValue?: T): Promise<T> {
 async function readRedis<T>(fileName: string, defaultValue?: T): Promise<T> {
   validateFileName(fileName);
 
+  const cachedValue = getCachedRedisValue(fileName);
+  if (cachedValue !== null) {
+    return cachedValue as T;
+  }
+
+  const redis = getRedisReadClient();
+
+  if (!redis) {
+    if (defaultValue !== undefined) {
+      return defaultValue;
+    }
+
+    throw new Error('Redis read credentials are missing');
+  }
+
   try {
-    const content = await getRedisReader(fileName)();
+    const content = await redis.get<string | Record<string, unknown> | unknown[]>(getRedisKey(fileName));
 
     if (content === null) {
       if (defaultValue !== undefined) {
@@ -180,7 +200,9 @@ async function readRedis<T>(fileName: string, defaultValue?: T): Promise<T> {
       throw new Error(`Key not found in Redis: ${fileName}`);
     }
 
-    return normalizeRedisValue<T>(content);
+    const normalized = normalizeRedisValue<T>(content);
+    setCachedRedisValue(fileName, normalized);
+    return normalized;
   } catch (error) {
     console.error(`Error reading Redis key ${getRedisKey(fileName)}:`, error);
   }
@@ -238,7 +260,7 @@ async function writeRedis<T>(fileName: string, data: T): Promise<void> {
   JSON.parse(content);
 
   await redis.set(getRedisKey(fileName), content);
-  revalidateTag(getRedisCacheTag(fileName), 'max');
+  setCachedRedisValue(fileName, data);
 }
 
 export async function writeJsonFile<T>(fileName: string, data: T): Promise<void> {
@@ -249,5 +271,7 @@ export async function writeJsonFile<T>(fileName: string, data: T): Promise<void>
 
     return writeRedis(fileName, data);
   }
+
+  clearCachedRedisValue(fileName);
   return writeFs(fileName, data);
 }

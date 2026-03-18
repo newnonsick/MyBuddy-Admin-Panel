@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { writeJsonFile } from '@/lib/file-storage';
 import { sttModelsSchema, formatZodError } from '@/lib/validation';
 import { isPayloadTooLarge } from '@/lib/security';
+import { revalidatePath } from 'next/cache';
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,6 +24,7 @@ export async function POST(request: NextRequest) {
     }
 
     await writeJsonFile('stt_models.json', result.data);
+    revalidatePath('/api/stt_models');
 
     return NextResponse.json(
       { success: true, count: result.data.length },

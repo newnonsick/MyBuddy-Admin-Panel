@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { writeJsonFile } from '@/lib/file-storage';
 import { llmModelsSchema, formatZodError } from '@/lib/validation';
 import { isPayloadTooLarge } from '@/lib/security';
+import { revalidatePath } from 'next/cache';
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,6 +24,7 @@ export async function POST(request: NextRequest) {
     }
 
     await writeJsonFile('llm_models.json', result.data);
+    revalidatePath('/api/llm_models');
 
     return NextResponse.json(
       { success: true, count: result.data.length },
