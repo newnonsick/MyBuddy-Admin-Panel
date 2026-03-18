@@ -34,7 +34,7 @@ The panel serves two roles:
 
 2. **Admin dashboard** -- a key-protected web UI for managing model catalog entries through a table view, form modals, raw JSON editing, and import/export workflows.
 
-There is no database. Model metadata is persisted as flat JSON files on disk with atomic writes, keeping the system lightweight and easy to deploy.
+Model metadata is persisted in Upstash Redis on Vercel and falls back to atomic JSON files on disk during local development, keeping the system lightweight and easy to deploy.
 
 ---
 
@@ -52,7 +52,7 @@ The Flutter app fetches `GET /api/llm_models` and `GET /api/stt_models` from thi
 
 ## Features
 
-- public cached REST endpoints for LLM and STT model metadata
+- public REST endpoints for LLM and STT model metadata with 1-hour server-side cache
 - admin dashboard with table view and raw JSON editor
 - CRUD operations for model entries via form modals
 - import and export model catalogs as JSON files
@@ -74,7 +74,7 @@ The Flutter app fetches `GET /api/llm_models` and `GET /api/stt_models` from thi
 | Styling | Tailwind CSS 4 |
 | Validation | Zod 4 |
 | Notifications | Sonner |
-| Storage | File-system JSON / Vercel Blob |
+| Storage | File-system JSON / Upstash Redis |
 
 ---
 
@@ -90,7 +90,7 @@ data/
 src/
   middleware.ts                Auth gate for /admin and /api/admin routes
   lib/
-    file-storage.ts            Atomic JSON read/write with path traversal protection
+    file-storage.ts            Atomic JSON read/write with path traversal protection and Redis support
     security.ts                Admin key validation, payload size checks, sanitization
     validation.ts              Zod schemas for LLM and STT model data
   types/
@@ -261,16 +261,24 @@ If `ADMIN_KEY` is not configured at all, all admin routes return 404.
 
 ## Data Storage
 
-Model metadata is stored as two JSON files in the `data/` directory:
+Model metadata is stored as two JSON files in the `data/` directory for local development and mirrored in Upstash Redis when configured:
 
 - `data/llm_models.json` -- LLM model catalog
 - `data/stt_models.json` -- STT model catalog
 
 Both files are gitignored. Example files (`*.example.json`) are committed as templates.
 
+### Redis-backed runtime storage
+
+When `KV_REST_API_URL` and `KV_REST_API_TOKEN` are available, the app reads and writes the catalogs directly from Upstash Redis using the keys `mybuddy-admin-panel:llm_models.json` and `mybuddy-admin-panel:stt_models.json`.
+
+### Cached Reads
+
+The public GET routes cache Redis reads for up to 1 hour through the Next.js server cache. Any successful admin update immediately invalidates the matching cache tag so the next GET returns fresh data.
+
 ### Atomic Writes
 
-The file storage layer writes to a temporary file first (`.tmp.<timestamp>`), then atomically renames it to the target path. This prevents data corruption from process crashes during writes. A round-trip JSON parse verification runs before the file is written.
+The file storage layer writes to a temporary file first (`.tmp.<timestamp>`), then atomically renames it to the target path when running locally. This prevents data corruption from process crashes during writes. A round-trip JSON parse verification runs before the file is written.
 
 ---
 
@@ -330,13 +338,12 @@ The project is a standard Next.js App Router application. Deploy to Vercel:
 
 1. Push the repository to GitHub.
 2. Import the project in Vercel.
-3. Add a **Vercel Blob** store to your project in the Vercel dashboard.
+3. Create a Vercel KV / Upstash Redis store and connect it to the project.
 4. Set the `ADMIN_KEY` environment variable in Vercel project settings.
-5. Ensure the `BLOB_READ_WRITE_TOKEN` environment variable is automatically populated by Vercel Blob.
-6. *(Optional but Recommended)* Set `BLOB_BASE_URL` to the public URL of your Blob store (e.g., `https://<id>.public.blob.vercel-storage.com`) to drastically improve read speeds. Without this, the server takes an extra round trip to dynamically list the blobs and find the download URL during reads.
-7. Deploy.
+5. Ensure `KV_REST_API_URL`, `KV_REST_API_TOKEN`, and `KV_REST_API_READ_ONLY_TOKEN` are available in the deployment environment.
+6. Deploy.
 
-When deployed on Vercel (detected automatically via the `VERCEL` environment variable), the admin panel natively uses **Vercel Blob Storage** instead of the local file system. This ensures durable persistence across deployments and serverless function executions. You no longer need to manually import data after each redeployment.
+When deployed on Vercel, the admin panel natively uses **Upstash Redis** for persistent storage instead of the local file system. This ensures durable persistence across deployments and serverless function executions.
 
 ### Self-Hosted
 
@@ -415,7 +422,7 @@ The app will fetch model catalogs from your admin panel instead of the default U
 ### Data lost after redeployment
 
 - **Local / Self-Hosted**: The file system is ephemeral inside Docker containers without mounted volumes. Ensure you mount a volume at the `data/` directory.
-- **Vercel Deployments**: The app automatically uses Vercel Blob for persistent data storage if configured. Verify that a Vercel Blob store is attached to your project and the `BLOB_READ_WRITE_TOKEN` environment variable is set.
+- **Vercel Deployments**: Verify that the Upstash Redis / Vercel KV environment variables are present: `KV_REST_API_URL`, `KV_REST_API_TOKEN`, and `KV_REST_API_READ_ONLY_TOKEN`.
 
 ---
 
