@@ -129,6 +129,22 @@ function getRedisWriteClient(): Redis | null {
   return redisWriteClient;
 }
 
+function normalizeRedisValue<T>(value: unknown): T {
+  if (value === null || value === undefined) {
+    throw new Error('Redis value is empty');
+  }
+
+  if (typeof value === 'string') {
+    return JSON.parse(value) as T;
+  }
+
+  if (typeof value === 'object') {
+    return value as T;
+  }
+
+  return JSON.parse(String(value)) as T;
+}
+
 function validateFileName(fileName: string): void {
   const normalized = path.basename(fileName);
   if (normalized !== fileName || !ALLOWED_FILES.has(normalized)) {
@@ -164,7 +180,7 @@ async function readRedis<T>(fileName: string, defaultValue?: T): Promise<T> {
       throw new Error(`Key not found in Redis: ${fileName}`);
     }
 
-    return JSON.parse(content) as T;
+    return normalizeRedisValue<T>(content);
   } catch (error) {
     console.error(`Error reading Redis key ${getRedisKey(fileName)}:`, error);
   }
