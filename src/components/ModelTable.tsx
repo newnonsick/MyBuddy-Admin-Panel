@@ -63,7 +63,7 @@ export default function ModelTable({ data, columns, onEdit, onDelete, onReorder,
         <tbody className="divide-y divide-border">
           {data.map((row, index) => (
             <tr
-              key={index}
+              key={getRowKey(row, index)}
               className={`hover:bg-surface-hover transition-colors duration-150 ${dropTargetIndex === index ? 'bg-primary-50/50' : ''}`}
               draggable={canReorder}
               onDragStart={(event) => {
@@ -151,6 +151,15 @@ export default function ModelTable({ data, columns, onEdit, onDelete, onReorder,
       </table>
     </div>
   );
+}
+
+function getRowKey(row: Record<string, unknown>, index: number): string {
+  const id = row.id;
+  if (typeof id === 'string' || typeof id === 'number') {
+    return `row-${String(id)}`;
+  }
+
+  return `row-${index}`;
 }
 
 function renderValue(value: unknown): React.ReactNode {

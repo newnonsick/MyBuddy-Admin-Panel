@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { SttModel, SttModelConfig, CoreMLConfig, SttModelDisplay } from '@/types/stt-models';
+import { fetchDownloadMetadataForClient } from '@/lib/download-metadata-client';
 
 interface SttModelFormModalProps {
   model: SttModel | null;
@@ -40,6 +41,8 @@ const DEFAULT_STT: SttModel = {
   display: { ...DEFAULT_DISPLAY },
 };
 
+const METADATA_DEBOUNCE_MS = 700;
+
 export default function SttModelFormModal({ model, adminKey, onSave, onClose }: SttModelFormModalProps) {
   const isEditing = model !== null;
   const [form, setForm] = useState<SttModel>(
@@ -48,8 +51,8 @@ export default function SttModelFormModal({ model, adminKey, onSave, onClose }: 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const initialMainUrlRef = useRef((model?.downloadUrl ?? '').trim());
   const initialCoreMlUrlRef = useRef((model?.config?.coreML?.downloadUrl ?? '').trim());
-  const skipInitialMainEditFetchRef = useRef(isEditing);
-  const skipInitialCoreMlEditFetchRef = useRef(isEditing);
+  const lastRequestedMainUrlRef = useRef('');
+  const lastRequestedCoreMlUrlRef = useRef('');
   const [mainMetadataState, setMainMetadataState] = useState<{ status: 'idle' | 'loading' | 'error' | 'success'; message: string }>({
     status: 'idle',
     message: '',
@@ -58,6 +61,10 @@ export default function SttModelFormModal({ model, adminKey, onSave, onClose }: 
     status: 'idle',
     message: '',
   });
+  const currentMainUrl = form.downloadUrl.trim();
+  const currentCoreMlUrl = form.config.coreML.downloadUrl.trim();
+  const hasInvalidMainUrl = currentMainUrl.length > 0 && !isValidUrl(currentMainUrl);
+  const hasInvalidCoreMlUrl = currentCoreMlUrl.length > 0 && !isValidUrl(currentCoreMlUrl);
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -70,21 +77,7 @@ export default function SttModelFormModal({ model, adminKey, onSave, onClose }: 
     setState({ status: 'loading', message: 'Fetching size metadata…' });
 
     try {
-      const response = await fetch('/api/download-metadata', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-key': adminKey,
-        },
-        body: JSON.stringify({ url }),
-      });
-
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result.error || result.details || 'Failed to fetch metadata');
-      }
-
-      const metadata = result.metadata as { approximateSize: string; expectedMinBytes: number };
+      const metadata = await fetchDownloadMetadataForClient(url, adminKey);
 
       if (target === 'main') {
         setForm((prev) => ({
@@ -122,27 +115,28 @@ export default function SttModelFormModal({ model, adminKey, onSave, onClose }: 
   useEffect(() => {
     const url = form.downloadUrl.trim();
     if (!url) {
-      setMainMetadataState({ status: 'idle', message: '' });
+      lastRequestedMainUrlRef.current = '';
       return;
     }
 
-    if (skipInitialMainEditFetchRef.current && url === initialMainUrlRef.current) {
-      skipInitialMainEditFetchRef.current = false;
+    if (isEditing && url === initialMainUrlRef.current) {
       return;
     }
-
-    skipInitialMainEditFetchRef.current = false;
 
     try {
       new URL(url);
     } catch {
-      setMainMetadataState({ status: 'error', message: 'Enter a valid URL to auto-fetch size metadata.' });
+      return;
+    }
+
+    if (lastRequestedMainUrlRef.current === url) {
       return;
     }
 
     const timeout = setTimeout(() => {
+      lastRequestedMainUrlRef.current = url;
       void fetchMetadataForUrl(url, 'main');
-    }, 500);
+    }, METADATA_DEBOUNCE_MS);
 
     return () => clearTimeout(timeout);
   }, [fetchMetadataForUrl, form.downloadUrl, isEditing]);
@@ -150,32 +144,38 @@ export default function SttModelFormModal({ model, adminKey, onSave, onClose }: 
   useEffect(() => {
     const coreUrl = form.config.coreML.downloadUrl.trim();
     if (!coreUrl) {
-      setCoreMlMetadataState({ status: 'idle', message: '' });
+      lastRequestedCoreMlUrlRef.current = '';
       return;
     }
 
-    if (skipInitialCoreMlEditFetchRef.current && coreUrl === initialCoreMlUrlRef.current) {
-      skipInitialCoreMlEditFetchRef.current = false;
+    if (isEditing && coreUrl === initialCoreMlUrlRef.current) {
       return;
     }
-
-    skipInitialCoreMlEditFetchRef.current = false;
 
     try {
       new URL(coreUrl);
     } catch {
-      setCoreMlMetadataState({ status: 'error', message: 'Enter a valid URL to auto-fetch CoreML size metadata.' });
+      return;
+    }
+
+    if (lastRequestedCoreMlUrlRef.current === coreUrl) {
       return;
     }
 
     const timeout = setTimeout(() => {
+      lastRequestedCoreMlUrlRef.current = coreUrl;
       void fetchMetadataForUrl(coreUrl, 'coreml');
-    }, 500);
+    }, METADATA_DEBOUNCE_MS);
 
     return () => clearTimeout(timeout);
   }, [fetchMetadataForUrl, form.config.coreML.downloadUrl, isEditing]);
 
   const updateField = <K extends keyof SttModel>(key: K, value: SttModel[K]) => {
+    if (key === 'downloadUrl' && typeof value === 'string') {
+      lastRequestedMainUrlRef.current = '';
+      setMainMetadataState({ status: 'idle', message: '' });
+    }
+
     setForm(prev => ({ ...prev, [key]: value }));
     setErrors(prev => { const next = { ...prev }; delete next[key]; return next; });
   };
@@ -185,6 +185,11 @@ export default function SttModelFormModal({ model, adminKey, onSave, onClose }: 
   };
 
   const updateCoreML = <K extends keyof CoreMLConfig>(key: K, value: CoreMLConfig[K]) => {
+    if (key === 'downloadUrl' && typeof value === 'string') {
+      lastRequestedCoreMlUrlRef.current = '';
+      setCoreMlMetadataState({ status: 'idle', message: '' });
+    }
+
     setForm(prev => ({ ...prev, config: { ...prev.config, coreML: { ...prev.config.coreML, [key]: value } } }));
   };
 
@@ -247,7 +252,9 @@ export default function SttModelFormModal({ model, adminKey, onSave, onClose }: 
               <input type="text" value={form.downloadUrl} onChange={e => updateField('downloadUrl', e.target.value)}
                 className={inputClass(errors.downloadUrl)} placeholder="https://..." />
             </Field>
-            {mainMetadataState.status !== 'idle' && (
+            {hasInvalidMainUrl ? (
+              <p className="text-xs text-error">Enter a valid URL to auto-fetch size metadata.</p>
+            ) : mainMetadataState.status !== 'idle' && (
               <p className={`text-xs ${mainMetadataState.status === 'error' ? 'text-error' : 'text-text-muted'}`}>
                 {mainMetadataState.message}
               </p>
@@ -304,7 +311,9 @@ export default function SttModelFormModal({ model, adminKey, onSave, onClose }: 
               <input type="text" value={form.config.coreML.downloadUrl} onChange={e => updateCoreML('downloadUrl', e.target.value)}
                 className={inputClass(errors['coreML.downloadUrl'])} placeholder="https://..." />
             </Field>
-            {coreMlMetadataState.status !== 'idle' && (
+            {hasInvalidCoreMlUrl ? (
+              <p className="text-xs text-error">Enter a valid URL to auto-fetch CoreML size metadata.</p>
+            ) : coreMlMetadataState.status !== 'idle' && (
               <p className={`text-xs ${coreMlMetadataState.status === 'error' ? 'text-error' : 'text-text-muted'}`}>
                 {coreMlMetadataState.message}
               </p>
@@ -363,4 +372,13 @@ function Field({ label, error, children }: { label: string; error?: string; chil
 function inputClass(error?: string): string {
   return `w-full px-3 py-2 text-sm bg-surface border rounded-lg outline-none transition-all duration-200
     ${error ? 'border-error focus:ring-2 focus:ring-red-100' : 'border-border focus:border-border-focus focus:ring-2 focus:ring-primary-100'}`;
+}
+
+function isValidUrl(value: string): boolean {
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
 }

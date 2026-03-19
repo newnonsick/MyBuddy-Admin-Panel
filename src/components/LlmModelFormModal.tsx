@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { LlmModel, LlmModelConfig } from '@/types/llm-models';
 import { LLM_MODEL_TYPES, FILE_TYPES } from '@/types/llm-models';
+import { fetchDownloadMetadataForClient } from '@/lib/download-metadata-client';
 
 interface LlmModelFormModalProps {
   model: LlmModel | null;
@@ -33,16 +34,20 @@ const DEFAULT_LLM: LlmModel = {
   config: { ...DEFAULT_CONFIG },
 };
 
+const METADATA_DEBOUNCE_MS = 700;
+
 export default function LlmModelFormModal({ model, adminKey, onSave, onClose }: LlmModelFormModalProps) {
   const isEditing = model !== null;
   const [form, setForm] = useState<LlmModel>(model ?? { ...DEFAULT_LLM, config: { ...DEFAULT_CONFIG } });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const initialDownloadUrlRef = useRef((model?.downloadUrl ?? '').trim());
-  const skipInitialEditFetchRef = useRef(isEditing);
+  const lastRequestedUrlRef = useRef('');
   const [metadataState, setMetadataState] = useState<{ status: 'idle' | 'loading' | 'error' | 'success'; message: string }>({
     status: 'idle',
     message: '',
   });
+  const currentDownloadUrl = form.downloadUrl.trim();
+  const hasInvalidDownloadUrl = currentDownloadUrl.length > 0 && !isValidUrl(currentDownloadUrl);
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -54,21 +59,7 @@ export default function LlmModelFormModal({ model, adminKey, onSave, onClose }: 
     setMetadataState({ status: 'loading', message: 'Fetching size metadata…' });
 
     try {
-      const response = await fetch('/api/download-metadata', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-key': adminKey,
-        },
-        body: JSON.stringify({ url }),
-      });
-
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result.error || result.details || 'Failed to fetch metadata');
-      }
-
-      const metadata = result.metadata as { approximateSize: string; expectedMinBytes: number };
+      const metadata = await fetchDownloadMetadataForClient(url, adminKey);
       setForm((prev) => ({
         ...prev,
         approximateSize: prev.downloadUrl.trim() === url ? metadata.approximateSize : prev.approximateSize,
@@ -86,32 +77,38 @@ export default function LlmModelFormModal({ model, adminKey, onSave, onClose }: 
   useEffect(() => {
     const url = form.downloadUrl.trim();
     if (!url) {
-      setMetadataState({ status: 'idle', message: '' });
+      lastRequestedUrlRef.current = '';
       return;
     }
 
-    if (skipInitialEditFetchRef.current && url === initialDownloadUrlRef.current) {
-      skipInitialEditFetchRef.current = false;
+    if (isEditing && url === initialDownloadUrlRef.current) {
       return;
     }
-
-    skipInitialEditFetchRef.current = false;
 
     try {
       new URL(url);
     } catch {
-      setMetadataState({ status: 'error', message: 'Enter a valid URL to auto-fetch size metadata.' });
+      return;
+    }
+
+    if (lastRequestedUrlRef.current === url) {
       return;
     }
 
     const timeout = setTimeout(() => {
+      lastRequestedUrlRef.current = url;
       void fetchMetadataForUrl(url);
-    }, 500);
+    }, METADATA_DEBOUNCE_MS);
 
     return () => clearTimeout(timeout);
   }, [fetchMetadataForUrl, form.downloadUrl, isEditing]);
 
   const updateField = <K extends keyof LlmModel>(key: K, value: LlmModel[K]) => {
+    if (key === 'downloadUrl' && typeof value === 'string') {
+      lastRequestedUrlRef.current = '';
+      setMetadataState({ status: 'idle', message: '' });
+    }
+
     setForm(prev => ({ ...prev, [key]: value }));
     setErrors(prev => { const next = { ...prev }; delete next[key]; return next; });
   };
@@ -172,7 +169,9 @@ export default function LlmModelFormModal({ model, adminKey, onSave, onClose }: 
               <input type="text" value={form.downloadUrl} onChange={e => updateField('downloadUrl', e.target.value)}
                 className={inputClass(errors.downloadUrl)} placeholder="https://..." />
             </Field>
-            {metadataState.status !== 'idle' && (
+            {hasInvalidDownloadUrl ? (
+              <p className="text-xs text-error">Enter a valid URL to auto-fetch size metadata.</p>
+            ) : metadataState.status !== 'idle' && (
               <p className={`text-xs ${metadataState.status === 'error' ? 'text-error' : 'text-text-muted'}`}>
                 {metadataState.message}
               </p>
@@ -285,4 +284,13 @@ function Field({ label, error, children }: { label: string; error?: string; chil
 function inputClass(error?: string): string {
   return `w-full px-3 py-2 text-sm bg-surface border rounded-lg outline-none transition-all duration-200
     ${error ? 'border-error focus:ring-2 focus:ring-red-100' : 'border-border focus:border-border-focus focus:ring-2 focus:ring-primary-100'}`;
+}
+
+function isValidUrl(value: string): boolean {
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
 }

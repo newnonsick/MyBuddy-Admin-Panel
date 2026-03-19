@@ -7,10 +7,15 @@ const payloadSchema = z.object({
     url: z.string().url(),
 });
 
-export async function POST(request: NextRequest) {
-    const unauthorized = validateAdminRequest(request);
-    if (unauthorized) {
-        return unauthorized;
+export async function handleDownloadMetadataRequest(
+    request: NextRequest,
+    options: { requireAdminAuth: boolean }
+): Promise<NextResponse> {
+    if (options.requireAdminAuth) {
+        const unauthorized = validateAdminRequest(request);
+        if (unauthorized) {
+            return unauthorized;
+        }
     }
 
     try {
@@ -19,7 +24,10 @@ export async function POST(request: NextRequest) {
 
         if (!parsed.success) {
             return NextResponse.json(
-                { error: 'Invalid payload', details: parsed.error.issues.map((issue) => issue.message).join('; ') },
+                {
+                    error: 'Invalid payload',
+                    details: parsed.error.issues.map((issue) => issue.message).join('; '),
+                },
                 { status: 400, headers: { 'Cache-Control': 'no-store' } }
             );
         }
