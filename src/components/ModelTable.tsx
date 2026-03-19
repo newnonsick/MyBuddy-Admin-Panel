@@ -1,14 +1,21 @@
 'use client';
 
+import { useState } from 'react';
+
 interface ModelTableProps {
   data: Record<string, unknown>[];
   columns: { key: string; label: string; render?: (value: unknown, row: Record<string, unknown>) => React.ReactNode }[];
   onEdit?: (index: number) => void;
   onDelete?: (index: number) => void;
+  onReorder?: (fromIndex: number, toIndex: number) => void;
+  reorderDisabled?: boolean;
 }
 
-export default function ModelTable({ data, columns, onEdit, onDelete }: ModelTableProps) {
+export default function ModelTable({ data, columns, onEdit, onDelete, onReorder, reorderDisabled }: ModelTableProps) {
   const hasActions = onEdit || onDelete;
+  const canReorder = Boolean(onReorder) && !reorderDisabled;
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
 
   if (data.length === 0) {
     return (
@@ -36,7 +43,7 @@ export default function ModelTable({ data, columns, onEdit, onDelete }: ModelTab
         <thead>
           <tr className="bg-surface-secondary border-b border-border">
             <th className="text-left px-4 py-3 text-xs font-semibold text-text-secondary uppercase tracking-wider">
-              #
+              {canReorder ? 'Order' : '#'}
             </th>
             {columns.map((col) => (
               <th
@@ -55,8 +62,51 @@ export default function ModelTable({ data, columns, onEdit, onDelete }: ModelTab
         </thead>
         <tbody className="divide-y divide-border">
           {data.map((row, index) => (
-            <tr key={index} className="hover:bg-surface-hover transition-colors duration-150">
-              <td className="px-4 py-3 text-text-muted font-mono text-xs">{index + 1}</td>
+            <tr
+              key={index}
+              className={`hover:bg-surface-hover transition-colors duration-150 ${dropTargetIndex === index ? 'bg-primary-50/50' : ''}`}
+              draggable={canReorder}
+              onDragStart={(event) => {
+                if (!canReorder) return;
+                setDraggingIndex(index);
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', String(index));
+              }}
+              onDragOver={(event) => {
+                if (!canReorder) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'move';
+                setDropTargetIndex(index);
+              }}
+              onDrop={(event) => {
+                if (!canReorder || draggingIndex === null || !onReorder) return;
+                event.preventDefault();
+                onReorder(draggingIndex, index);
+                setDraggingIndex(null);
+                setDropTargetIndex(null);
+              }}
+              onDragEnd={() => {
+                setDraggingIndex(null);
+                setDropTargetIndex(null);
+              }}
+            >
+              <td className="px-4 py-3 text-text-muted font-mono text-xs">
+                {canReorder ? (
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 text-text-muted hover:text-text-secondary cursor-grab active:cursor-grabbing"
+                    title="Drag to reorder"
+                    tabIndex={-1}
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 6h.01M8 12h.01M8 18h.01M16 6h.01M16 12h.01M16 18h.01" />
+                    </svg>
+                    {index + 1}
+                  </button>
+                ) : (
+                  index + 1
+                )}
+              </td>
               {columns.map((col) => {
                 const value = getValue(row, col.key);
                 return (
@@ -109,9 +159,8 @@ function renderValue(value: unknown): React.ReactNode {
   }
   if (typeof value === 'boolean') {
     return (
-      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-        value ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600'
-      }`}>
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${value ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600'
+        }`}>
         {value ? 'Yes' : 'No'}
       </span>
     );

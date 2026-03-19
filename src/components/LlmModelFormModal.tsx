@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { LlmModel, LlmModelConfig } from '@/types/llm-models';
 import { LLM_MODEL_TYPES, FILE_TYPES } from '@/types/llm-models';
 
 interface LlmModelFormModalProps {
   model: LlmModel | null;
+  adminKey: string;
   onSave: (model: LlmModel) => void;
   onClose: () => void;
 }
@@ -32,16 +33,83 @@ const DEFAULT_LLM: LlmModel = {
   config: { ...DEFAULT_CONFIG },
 };
 
-export default function LlmModelFormModal({ model, onSave, onClose }: LlmModelFormModalProps) {
+export default function LlmModelFormModal({ model, adminKey, onSave, onClose }: LlmModelFormModalProps) {
   const isEditing = model !== null;
   const [form, setForm] = useState<LlmModel>(model ?? { ...DEFAULT_LLM, config: { ...DEFAULT_CONFIG } });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const initialDownloadUrlRef = useRef((model?.downloadUrl ?? '').trim());
+  const skipInitialEditFetchRef = useRef(isEditing);
+  const [metadataState, setMetadataState] = useState<{ status: 'idle' | 'loading' | 'error' | 'success'; message: string }>({
+    status: 'idle',
+    message: '',
+  });
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', handleEsc);
     return () => document.removeEventListener('keydown', handleEsc);
   }, [onClose]);
+
+  const fetchMetadataForUrl = useCallback(async (url: string) => {
+    setMetadataState({ status: 'loading', message: 'Fetching size metadata…' });
+
+    try {
+      const response = await fetch('/api/download-metadata', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-key': adminKey,
+        },
+        body: JSON.stringify({ url }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || result.details || 'Failed to fetch metadata');
+      }
+
+      const metadata = result.metadata as { approximateSize: string; expectedMinBytes: number };
+      setForm((prev) => ({
+        ...prev,
+        approximateSize: prev.downloadUrl.trim() === url ? metadata.approximateSize : prev.approximateSize,
+        expectedMinBytes: prev.downloadUrl.trim() === url ? metadata.expectedMinBytes : prev.expectedMinBytes,
+      }));
+      setMetadataState({ status: 'success', message: `Detected ${metadata.approximateSize}` });
+    } catch (error) {
+      setMetadataState({
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Failed to fetch metadata',
+      });
+    }
+  }, [adminKey]);
+
+  useEffect(() => {
+    const url = form.downloadUrl.trim();
+    if (!url) {
+      setMetadataState({ status: 'idle', message: '' });
+      return;
+    }
+
+    if (skipInitialEditFetchRef.current && url === initialDownloadUrlRef.current) {
+      skipInitialEditFetchRef.current = false;
+      return;
+    }
+
+    skipInitialEditFetchRef.current = false;
+
+    try {
+      new URL(url);
+    } catch {
+      setMetadataState({ status: 'error', message: 'Enter a valid URL to auto-fetch size metadata.' });
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      void fetchMetadataForUrl(url);
+    }, 500);
+
+    return () => clearTimeout(timeout);
+  }, [fetchMetadataForUrl, form.downloadUrl, isEditing]);
 
   const updateField = <K extends keyof LlmModel>(key: K, value: LlmModel[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -58,8 +126,6 @@ export default function LlmModelFormModal({ model, onSave, onClose }: LlmModelFo
     if (!form.id.trim()) errs.id = 'ID is required';
     if (!form.fileName.trim()) errs.fileName = 'File name is required';
     if (!form.downloadUrl.trim()) errs.downloadUrl = 'Download URL is required';
-    if (!form.approximateSize.trim()) errs.approximateSize = 'Size is required';
-    if (form.expectedMinBytes <= 0) errs.expectedMinBytes = 'Must be positive';
     if (form.config.maxTokens <= 0) errs['config.maxTokens'] = 'Must be positive';
     if (form.config.tokenBuffer <= 0) errs['config.tokenBuffer'] = 'Must be positive';
     setErrors(errs);
@@ -106,14 +172,19 @@ export default function LlmModelFormModal({ model, onSave, onClose }: LlmModelFo
               <input type="text" value={form.downloadUrl} onChange={e => updateField('downloadUrl', e.target.value)}
                 className={inputClass(errors.downloadUrl)} placeholder="https://..." />
             </Field>
+            {metadataState.status !== 'idle' && (
+              <p className={`text-xs ${metadataState.status === 'error' ? 'text-error' : 'text-text-muted'}`}>
+                {metadataState.message}
+              </p>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Approximate Size" error={errors.approximateSize}>
                 <input type="text" value={form.approximateSize} onChange={e => updateField('approximateSize', e.target.value)}
-                  className={inputClass(errors.approximateSize)} placeholder="1.5 GB" />
+                  className={inputClass(errors.approximateSize)} placeholder="Auto-filled when URL changes" />
               </Field>
               <Field label="Expected Min Bytes" error={errors.expectedMinBytes}>
                 <input type="number" value={form.expectedMinBytes} onChange={e => updateField('expectedMinBytes', Number(e.target.value))}
-                  className={inputClass(errors.expectedMinBytes)} />
+                  className={inputClass(errors.expectedMinBytes)} placeholder="Auto-filled when URL changes" />
               </Field>
             </div>
           </div>

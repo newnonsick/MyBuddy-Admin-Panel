@@ -14,6 +14,9 @@ import type { SttModel } from '@/types/stt-models';
 
 type Tab = 'llm' | 'stt';
 type ViewMode = 'table' | 'json';
+type SaveOptions = {
+  validateDownloadUrls: boolean;
+};
 
 type ModalState =
   | { type: 'closed' }
@@ -71,15 +74,18 @@ export default function AdminPageContent() {
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveOptions, setSaveOptions] = useState<SaveOptions>({
+    validateDownloadUrls: true,
+  });
 
-  const persistData = useCallback(async (tab: Tab, data: LlmModel[] | SttModel[]) => {
+  const persistData = useCallback(async (tab: Tab, data: LlmModel[] | SttModel[], options: SaveOptions = saveOptions) => {
     setSaving(true);
     try {
       const endpoint = tab === 'llm' ? '/api/admin/update-llm-models' : '/api/admin/update-stt-models';
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ models: data, options }),
       });
       const result = await res.json();
       if (!res.ok) {
@@ -94,7 +100,7 @@ export default function AdminPageContent() {
     } finally {
       setSaving(false);
     }
-  }, [adminKey]);
+  }, [adminKey, saveOptions]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -197,7 +203,26 @@ export default function AdminPageContent() {
     }
     if (activeTab === 'llm') setLlmData(payload);
     else setSttData(payload);
-    await persistData(activeTab, payload);
+    await persistData(activeTab, payload, saveOptions);
+  };
+
+  const handleReorder = async (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) {
+      return;
+    }
+
+    if (activeTab === 'llm') {
+      const updated = moveItem(llmData, fromIndex, toIndex);
+      setLlmData(updated);
+      setLlmJson(JSON.stringify(updated, null, 2));
+      await persistData('llm', updated, saveOptions);
+      return;
+    }
+
+    const updated = moveItem(sttData, fromIndex, toIndex);
+    setSttData(updated);
+    setSttJson(JSON.stringify(updated, null, 2));
+    await persistData('stt', updated, saveOptions);
   };
 
   const handleJsonChange = (value: string) => {
@@ -294,8 +319,8 @@ export default function AdminPageContent() {
             <button
               onClick={() => setActiveTab('llm')}
               className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 cursor-pointer ${activeTab === 'llm'
-                  ? 'bg-primary-600 text-white shadow-sm'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover'
+                ? 'bg-primary-600 text-white shadow-sm'
+                : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover'
                 }`}
             >
               LLM Models
@@ -307,8 +332,8 @@ export default function AdminPageContent() {
             <button
               onClick={() => setActiveTab('stt')}
               className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 cursor-pointer ${activeTab === 'stt'
-                  ? 'bg-primary-600 text-white shadow-sm'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover'
+                ? 'bg-primary-600 text-white shadow-sm'
+                : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover'
                 }`}
             >
               STT Models
@@ -370,8 +395,8 @@ export default function AdminPageContent() {
               <button
                 onClick={() => setViewMode('table')}
                 className={`p-1.5 rounded-md transition-all duration-200 cursor-pointer ${viewMode === 'table'
-                    ? 'bg-primary-50 text-primary-600'
-                    : 'text-text-muted hover:text-text-secondary'
+                  ? 'bg-primary-50 text-primary-600'
+                  : 'text-text-muted hover:text-text-secondary'
                   }`}
                 title="Table view"
               >
@@ -382,8 +407,8 @@ export default function AdminPageContent() {
               <button
                 onClick={() => setViewMode('json')}
                 className={`p-1.5 rounded-md transition-all duration-200 cursor-pointer ${viewMode === 'json'
-                    ? 'bg-primary-50 text-primary-600'
-                    : 'text-text-muted hover:text-text-secondary'
+                  ? 'bg-primary-50 text-primary-600'
+                  : 'text-text-muted hover:text-text-secondary'
                   }`}
                 title="JSON editor"
               >
@@ -413,6 +438,8 @@ export default function AdminPageContent() {
                 columns={currentColumns}
                 onEdit={handleEdit}
                 onDelete={handleDeleteRequest}
+                onReorder={handleReorder}
+                reorderDisabled={saving}
               />
             </div>
           ) : (
@@ -454,10 +481,20 @@ export default function AdminPageContent() {
         </div>
 
         <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 sm:gap-0 text-xs text-text-muted">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-4">
             <span>{currentData.length} model{currentData.length !== 1 ? 's' : ''}</span>
             <span>•</span>
             <span>{activeTab === 'llm' ? 'LLM' : 'STT'} Configuration</span>
+            <span>•</span>
+            <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={saveOptions.validateDownloadUrls}
+                onChange={(e) => setSaveOptions((prev) => ({ ...prev, validateDownloadUrls: e.target.checked }))}
+                className="w-3.5 h-3.5 rounded border-border text-primary-600 focus:ring-primary-500 cursor-pointer"
+              />
+              Validate URLs on save
+            </label>
           </div>
           <span className="hidden sm:inline">Data stored in /data/{activeTab === 'llm' ? 'llm_models' : 'stt_models'}.json</span>
         </div>
@@ -468,6 +505,7 @@ export default function AdminPageContent() {
       {(modal.type === 'add-llm' || modal.type === 'edit-llm') && (
         <LlmModelFormModal
           model={modal.type === 'edit-llm' ? modal.model : null}
+          adminKey={adminKey}
           onSave={handleLlmSave}
           onClose={() => setModal({ type: 'closed' })}
         />
@@ -475,6 +513,7 @@ export default function AdminPageContent() {
       {(modal.type === 'add-stt' || modal.type === 'edit-stt') && (
         <SttModelFormModal
           model={modal.type === 'edit-stt' ? modal.model : null}
+          adminKey={adminKey}
           onSave={handleSttSave}
           onClose={() => setModal({ type: 'closed' })}
         />
@@ -503,4 +542,11 @@ export default function AdminPageContent() {
       )}
     </div>
   );
+}
+
+function moveItem<T>(list: T[], fromIndex: number, toIndex: number): T[] {
+  const next = [...list];
+  const [moved] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, moved);
+  return next;
 }

@@ -163,8 +163,13 @@ async function readFs<T>(fileName: string, defaultValue?: T): Promise<T> {
   try {
     const content = await readFile(filePath, 'utf-8');
     return JSON.parse(content) as T;
-  } catch (error: any) {
-    if (error.code === 'ENOENT' && defaultValue !== undefined) {
+  } catch (error: unknown) {
+    if (
+      error instanceof Error
+      && 'code' in error
+      && error.code === 'ENOENT'
+      && defaultValue !== undefined
+    ) {
       return defaultValue;
     }
     throw error;
