@@ -160,16 +160,7 @@ ADMIN_KEY=your_secret_admin_key_here
 
 If `ADMIN_KEY` is not set, the admin panel and admin API endpoints return 404 and are effectively disabled.
 
-### 4. Seed Example Data
-
-Copy the example catalog files to create your initial data:
-
-```bash
-cp data/llm_models.example.json data/llm_models.json
-cp data/stt_models.example.json data/stt_models.json
-```
-
-### 5. Run Development Server
+### 4. Run Development Server
 
 ```bash
 npm run dev
